@@ -1,4 +1,5 @@
 import math
+from copy import deepcopy
 
 class GameState():
     def __init__(self):
@@ -373,7 +374,7 @@ class GameState():
     #Not working
     ###
     def minimax(self, board, tempBoard, depth, isMaximisingPlayer):
-        originalBoard = tempBoard
+        originalBoard = deepcopy(tempBoard)
         if depth == 0 or self.checkMate or self.stalemate:
             if not self.whiteToMove and self.checkMate:
                 self.board = originalBoard
@@ -393,7 +394,7 @@ class GameState():
             validMoves = self.getValidMoves()
             for move in validMoves:
                 self.makeMove(move)
-                board = self.board
+                board = deepcopy(self.board)
                 self.undoMove()
                 evaluation = self.minimax(board, originalBoard, depth-1, False)
                 maxEval = max(maxEval, evaluation)
@@ -403,10 +404,10 @@ class GameState():
             validMoves = self.getValidMoves()
             for move in validMoves:
                 self.makeMove(move)
-                board = self.board
+                board = deepcopy(self.board)
                 self.undoMove()
                 evaluation = self.minimax(board, originalBoard, depth -1, True)
-                minEval = max(minEval, evaluation)
+                minEval = min(minEval, evaluation)
             return minEval
                          
     def getBestMove(self, depth):
@@ -424,7 +425,7 @@ class GameState():
                 if value < bestValue:
                     bestValue = value
                     bestMove = move
-            self.undoMove
+            self.undoMove()
         return move
         
 
