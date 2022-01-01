@@ -1,5 +1,6 @@
 import math
-from copy import deepcopy
+import copy
+
 
 class GameState():
     def __init__(self):
@@ -22,6 +23,7 @@ class GameState():
         
         
         self.whiteToMove = True
+        self.AIturn = False
         self.moveLog = []
         # used in identifying checks and invalid moves
         self.wKingLoc = (7,4)
@@ -352,8 +354,10 @@ class GameState():
     
 
     def getCastleMoves(self, r, c, moves):
+        # cant castle if a aquare a is under attack
         if self.squareUnderAttack(r, c):
             return
+        # can move there
         if (self.whiteToMove and self.currentCastlingRight.wks) or (not self.whiteToMove and self.currentCastlingRight.bks):
             self.getKingsideCastleMoves(r, c, moves)
         if (self.whiteToMove and self.currentCastlingRight.wqs) or (not self.whiteToMove and self.currentCastlingRight.bqs):
@@ -370,78 +374,225 @@ class GameState():
                 moves.append(Move((r, c), (r, c - 2), self.board, isCastleMove = True))
 
 
-    ###
-    #Not working
-    ###
-    def minimax(self, board, tempBoard, depth, isMaximisingPlayer):
-        originalBoard = deepcopy(tempBoard)
-        if depth == 0 or self.checkMate or self.stalemate:
-            if not self.whiteToMove and self.checkMate:
-                self.board = originalBoard
-                return -10000
-            elif self.whiteToMove and self.checkMate:
-                self.board = originalBoard
-                return  10000
-            elif self.stalemate:
-                self.board = originalBoard
-                return 0
-            else:
-                value = self.boardEval()
-                self.board = originalBoard
+    def minimax(self, depth, alpha, beta, isMaximiser):
+        possibleMoves = self.getValidMoves()
+        value = self.boardEval()
+        if depth == 0 or value == -math.inf or value == math.inf:
                 return value
-        if isMaximisingPlayer:
+        if isMaximiser:
             maxEval = -math.inf
-            validMoves = self.getValidMoves()
-            for move in validMoves:
+            for move in possibleMoves:
                 self.makeMove(move)
-                board = deepcopy(self.board)
+                evaluation = self.minimax(depth - 1, alpha, beta, False)
                 self.undoMove()
-                evaluation = self.minimax(board, originalBoard, depth-1, False)
-                maxEval = max(maxEval, evaluation)
+                if (evaluation > maxEval):
+                    maxEval = evaluation
+                alpha = max(alpha, evaluation)
+                if beta <= alpha:
+                    break
             return maxEval
         else:
             minEval = math.inf
-            validMoves = self.getValidMoves()
-            for move in validMoves:
+            for move in possibleMoves:
                 self.makeMove(move)
-                board = deepcopy(self.board)
+                evaluation = self.minimax(depth - 1, alpha, beta, True)
                 self.undoMove()
-                evaluation = self.minimax(board, originalBoard, depth -1, True)
-                minEval = min(minEval, evaluation)
+                minEval = min(evaluation, minEval)
+                beta = min(evaluation, beta)
+                if beta <= alpha:
+                    break
             return minEval
                          
-    def getBestMove(self, depth):
+    def getBestMove(self, depth, isMaximiser):
+        # function to get and play best move for AI
+        tempCheckmate = copy.deepcopy(self.checkMate)
+        tempStalemate = copy.deepcopy(self.stalemate)
+        tempCastle = copy.deepcopy((self.currentCastlingRight.wks, self.currentCastlingRight.bks,
+                                             self.currentCastlingRight.wqs, self.currentCastlingRight.bqs))
+
+        self.AIturn = True
         moves = self.getValidMoves()
-        bestMove = ''
-        bestValue = -math.inf if self.whiteToMove else math.inf
+        bestValue = -math.inf if isMaximiser else math.inf
+        bestMove = None
         for move in moves:
             self.makeMove(move)
-            value = self.minimax(self.board, self.board, depth, self.whiteToMove)
-            if self.whiteToMove:
-                if value > bestValue:
-                    bestValue = value
-                    bestMove = move
-            else:
-                if value < bestValue:
-                    bestValue = value
-                    bestMove = move
+            value = self.minimax(depth - 1, -math.inf, math.inf, not isMaximiser)
             self.undoMove()
-        return move
+            if value == -math.inf and not isMaximiser:
+                return move
+            elif value == math.inf and isMaximiser:
+                return move
+            else:
+                if isMaximiser:
+                    try:
+                        if value > bestValue:
+                            bestValue = value
+                            bestMove = copy.deepcopy(move)
+                    except:
+                        pass
+                else:
+                    try:
+                        if value < bestValue:
+                            bestValue = value
+                            bestMove = copy.deepcopy(move)
+                    except:
+                        pass
+        self.AIturn = False
+        self.checkMate = copy.deepcopy(tempCheckmate)
+        self.stalemate = copy.deepcopy(tempStalemate)
+        self.currentCastlingRight = castleRights(tempCastle[0],tempCastle[1],tempCastle[2],tempCastle[3])
+
+        return bestMove
+    
+    def printAllMoveID(self, l):
+        # testing
+        for move in l:
+            print(move.moveID)
+            v = self.boardEval()
+            print(v)
         
 
     def boardEval(self):
-        values = {'wP': 1, 'wR':5, 'wN':3, 'wB':3, 'wQ':9, 'wK':900,
-                  'bP': -1, 'bR':-5, 'bN':-3, 'bB':-3, 'bQ':-9, 'bK':-900}
+        moves = self.getValidMoves()
+        if not self.whiteToMove and self.checkMate:
+            return math.inf
+        elif self.whiteToMove and self.checkMate:
+            return -math.inf
+        elif self.stalemate:
+            return 0
+        #Pawns
+        wPpieceSquare = [[ 0,  0,  0,  0,  0,  0,  0,  0],
+                         [50, 50, 50, 50, 50, 50, 50, 50],
+                         [10, 10, 20, 30, 30, 20, 10, 10],
+                         [5,  5, 10, 25, 25, 10,  5, 5],
+                         [0,  0,  0, 20, 20,  0,  0, 0],
+                         [5, -5,-10,  0,  0,-10, -5,  5],
+                         [5, 10, 10,-20,-20, 10, 10,  5],
+                         [0,  0,  0,  0,  0,  0,  0,  0]]
+
+        #Knights
+        wNpieceSquare = [[-50,-40,-30,-30,-30,-30,-40,-50],
+                         [-40,-20,  0,  0,  0,  0,-20,-40],
+                         [-30,  0, 10, 15, 15, 10,  0,-30],
+                         [-30,  5, 15, 20, 20, 15,  5,-30],
+                         [-30,  0, 15, 20, 20, 15,  0,-30],
+                         [-30,  5, 10, 15, 15, 10,  5,-30],
+                         [-40,-20,  0,  5,  5,  0,-20,-40],
+                         [-50,-40,-30,-30,-30,-30,-40,-50]]
+
+        #Bishops
+        wBpieceSquare = [[-20,-10,-10,-10,-10,-10,-10,-20],
+                         [-10,  0,  0,  0,  0,  0,  0,-10],
+                         [-10,  0,  5, 10, 10,  5,  0,-10],
+                         [-10,  5,  5, 10, 10,  5,  5,-10],
+                         [-10,  0, 10, 10, 10, 10,  0,-10],
+                         [-10, 10, 10, 10, 10, 10, 10,-10],
+                         [-10,  5,  0,  0,  0,  0,  5,-10],
+                         [-20,-10,-10,-10,-10,-10,-10,-20]]
+
+        #Rooks
+        wRpieceSquare = [[0,  0,  0,  0,  0,  0,  0,  0],
+                        [ 5, 10, 10, 10, 10, 10, 10,  5],
+                        [-5,  0,  0,  0,  0,  0,  0, -5],
+                        [-5,  0,  0,  0,  0,  0,  0, -5],
+                        [-5,  0,  0,  0,  0,  0,  0, -5],
+                        [-5,  0,  0,  0,  0,  0,  0, -5],
+                        [-5,  0,  0,  0,  0,  0,  0, -5],
+                        [ 0,  0,  0,  5,  5,  0,  0,  0]]
+
+        #Queens
+        wQpieceSquare = [[-20,-10,-10, -5, -5,-10,-10,-20],
+                         [-10,  0,  0,  0,  0,  0,  0,-10],
+                         [-10,  0,  5,  5,  5,  5,  0,-10],
+                         [ -5,  0,  5,  5,  5,  5,  0, -5],
+                         [  0,  0,  5,  5,  5,  5,  0, -5],
+                         [-10,  5,  5,  5,  5,  5,  0,-10],
+                         [-10,  0,  5,  0,  0,  0,  0,-10],
+                         [-20,-10,-10, -5, -5,-10,-10,-20]]
+        
+        #King
+        wKpieceSquare = [[-30,-40,-40,-50,-50,-40,-40,-30],
+                         [-30,-40,-40,-50,-50,-40,-40,-30],
+                         [-30,-40,-40,-50,-50,-40,-40,-30],
+                         [-30,-40,-40,-50,-50,-40,-40,-30],
+                         [-20,-30,-30,-40,-40,-30,-30,-20],
+                         [-10,-20,-20,-20,-20,-20,-20,-10],
+                         [ 20, 20,  0,  0,  0,  0, 20, 20],
+                         [ 20, 30, 10,  0,  0, 10, 30, 20]]
+        
+        bPpieceSquare = self.reversePiece(wPpieceSquare)
+        bNpieceSquare = self.reversePiece(wNpieceSquare)
+        bBpieceSquare = self.reversePiece(wBpieceSquare)
+        bRpieceSquare = self.reversePiece(wRpieceSquare)
+        bQpieceSquare = self.reversePiece(wQpieceSquare)
+        bKpieceSquare = self.reversePiece(wKpieceSquare)
+        
+        values = {'wP': 100, 'wR':500, 'wN':300, 'wB':300, 'wQ':900, 'wK':20000,
+                  'bP': -100, 'bR':-500, 'bN':-300, 'bB':-300, 'bQ':-900, 'bK':-20000}
         score = 0
         for r in range(len(self.board)):
             for c in range(len(self.board[r])):
-                if self.board[r][c] != '--':
+                piece = self.board[r][c]
+                if piece != '--':
                     score += values[self.board[r][c]]
-        return score        
-    ###
-    ###
-    ###
+                    #Pawns
+                    if piece == 'wP':
+                        score += wPpieceSquare[r][c]
+                    elif piece == 'bP':
+                        score += bPpieceSquare[r][c]
+                    #Knights
+                    elif piece == 'wN':
+                        score += wNpieceSquare[r][c]
+                    elif piece == 'bN':
+                        score += bNpieceSquare[r][c]
+                    #Bishops
+                    elif piece == 'wB':
+                        score += wBpieceSquare[r][c]
+                    elif piece == 'bB':
+                        score += bBpieceSquare[r][c]
+                    #Rooks
+                    elif piece == 'wR':
+                        score += wRpieceSquare[r][c]
+                    elif piece == 'bR':
+                        score += bRpieceSquare[r][c]
+                    #Queens
+                    elif piece == 'wQ':
+                        score += wQpieceSquare[r][c]
+                    elif piece == 'bQ':
+                        score += bQpieceSquare[r][c]
+                    #Kings
+                    elif piece == 'wK':
+                        score += wKpieceSquare[r][c]
+                    elif piece == 'bK':
+                        score += bKpieceSquare[r][c]
                 
+        return score
+
+
+    #IN DEVELOPMENT
+    '''
+    def moveOrderer(moves):
+        startOrdedMoves = []
+        end OrderedMoves = []
+        oppColour = 'b' if self.whiteToMove else 'w'
+        for i in range(len(moves)):
+            cap = moves[i].pieceCaptured
+            if cap != "--":
+                if cap == oppColour + "Q":
+                    ordedMoves.append(moves[i])
+                if cap == 
+     '''               
+
+    def reversePiece(self, l):
+        newList = []
+        for row in l:
+            newList.insert(0,row)
+        for r in range(8):
+            for c in range(8):
+                newList[r][c] = newList[r][c] * -1
+                
+        return newList
+                   
 
 
 class castleRights():
@@ -499,15 +650,3 @@ class Move():
         return self.colsToFiles[c] + self.rowsToRanks[r]
 
 
-
-
-
-
-
-
-
-
-
-
-
-    

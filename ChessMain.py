@@ -1,10 +1,9 @@
 import ChessEngine
 import pygame as p
 import math
-import random
 
 
-width = height = 512
+width = height = 800
 dim = 8 #Dimensions (8x8)
 sqsize = height // dim
 maxfps = 15
@@ -63,25 +62,25 @@ def main():
                     sqSelected = ()
                     playerClicks = []
                     moveMade = True
-        drawGameState(screen, gs)
-        clock.tick(maxfps)
-        p.display.flip()
                     
         if moveMade:
             validMoves = gs.getValidMoves()
             moveMade = False
+        drawGameState(screen, gs)
+        clock.tick(maxfps)
+        p.display.flip()
 
-        if gs.checkMate:
+        if gs.checkMate and not gs.AIturn:
             print("Black wins by checkmate") if gs.whiteToMove else print("White wins by checkmate")
             running = False
         
-        if gs.stalemate:
+        if gs.stalemate and not gs.AIturn:
             print("Draw by stalemate")
             running = False
 
         if not gs.whiteToMove and len(validMoves) != 0 and not moveMade:
-            move = gs.getBestMove(1)
-            gs.makeMove(move)
+            x = gs.getBestMove(2, False)
+            gs.makeMove(x)
             moveMade = True
             
 
@@ -104,6 +103,7 @@ def drawPieces(screen,board):
             piece = board[r][c]
             if piece != "--":
                 screen.blit(images[piece], p.Rect(c*sqsize, r*sqsize, sqsize, sqsize))
+
 
 
 
